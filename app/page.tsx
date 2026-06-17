@@ -9,6 +9,7 @@ import {
   downloadDriveFile,
   uploadToDrive,
   listFolderImages,
+  createDriveFolder,
 } from './utils/driveHelper'
 
 const DEFAULT_OPTIONS: Options = {
@@ -45,6 +46,8 @@ export default function Home() {
   const [driveProgress, setDriveProgress] = useState({ done: 0, total: 0 })
   const [driveReady, setDriveReady] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
+  const [showFolderModal, setShowFolderModal] = useState(false)
+  const [folderName, setFolderName] = useState('Resized Images')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -171,12 +174,15 @@ export default function Home() {
     setProcessing(false)
   }, [images, options])
 
-  const exportOneToDrive = useCallback(async (id: string) => {
+  const exportOneToDrive = useCallback(async (id: string, folderId?: string) => {
     const img = images.find(i => i.id === id)
     if (!img?.resultBlob || !img.outputFilename) return
     setImages(prev => prev.map(i => i.id === id ? { ...i, driveUploading: true } : i))
     try {
-      const link = await uploadToDrive(img.resultBlob, img.outputFilename, getMimeType(options.format))
+      const filename = img.customName
+        ? img.customName.replace(/\.[^.]+$/, '') + '.' + options.format
+        : img.outputFilename
+      const link = await uploadToDrive(img.resultBlob, filename, getMimeType(options.format), folderId)
       setImages(prev => prev.map(i => i.id === id ? { ...i, driveUploading: false, driveLink: link } : i))
     } catch (e) {
       setImages(prev => prev.map(i => i.id === id ? { ...i, driveUploading: false } : i))
@@ -185,13 +191,18 @@ export default function Home() {
     }
   }, [images, options.format])
 
-  const exportAllToDrive = useCallback(async () => {
+  const exportAllToDrive = useCallback(async (name: string) => {
+    setShowFolderModal(false)
     setExportingAll(true)
-    const done = images.filter(i => i.status === 'done' && i.resultBlob)
-    for (const img of done) {
-      await exportOneToDrive(img.id)
+    try {
+      const folderId = await createDriveFolder(name)
+      const done = images.filter(i => i.status === 'done' && i.resultBlob)
+      for (const img of done) {
+        await exportOneToDrive(img.id, folderId)
+      }
+    } finally {
+      setExportingAll(false)
     }
-    setExportingAll(false)
   }, [images, exportOneToDrive])
 
   const downloadAll = useCallback(async () => {
@@ -283,7 +294,7 @@ export default function Home() {
                     &#128230; Download ZIP
                   </button>
                   {driveConfigured && (
-                    <button onClick={exportAllToDrive} disabled={exportingAll} className="flex items-center gap-2 bg-white border-2 border-blue-400 text-blue-700 hover:bg-blue-50 text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                    <button onClick={() => setShowFolderModal(true)} disabled={exportingAll} className="flex items-center gap-2 bg-white border-2 border-blue-400 text-blue-700 hover:bg-blue-50 text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
                       <svg className="w-4 h-4" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
                         <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
                         <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
@@ -310,6 +321,43 @@ export default function Home() {
       <footer className="text-center py-8 text-xs text-gray-400">
         All processing happens in your browser. Images saved to Drive go directly from browser &rarr; Google.
       </footer>
+
+      {/* Folder name modal */}
+      {showFolderModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Save to Google Drive</h3>
+            <p className="text-sm text-gray-500">A new folder will be created in your Drive with all resized images.</p>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Folder name</label>
+              <input
+                type="text"
+                value={folderName}
+                onChange={e => setFolderName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && folderName.trim() && exportAllToDrive(folderName.trim())}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+                placeholder="e.g. GC Website Photos Resized"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFolderModal(false)}
+                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => folderName.trim() && exportAllToDrive(folderName.trim())}
+                disabled={!folderName.trim()}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                Create &amp; Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

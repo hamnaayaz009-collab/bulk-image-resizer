@@ -146,13 +146,37 @@ export async function downloadDriveFile(fileId: string): Promise<Blob> {
   return res.blob()
 }
 
+export async function createDriveFolder(name: string): Promise<string> {
+  const token = await ensureToken()
+  const metadata = {
+    name,
+    mimeType: 'application/vnd.google-apps.folder',
+  }
+  const res = await fetch(
+    'https://www.googleapis.com/drive/v3/files?fields=id',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(metadata),
+    }
+  )
+  if (!res.ok) throw new Error(`Folder creation failed: ${res.status}`)
+  const json = await res.json()
+  return json.id as string
+}
+
 export async function uploadToDrive(
   blob: Blob,
   filename: string,
-  mimeType: string
+  mimeType: string,
+  folderId?: string
 ): Promise<string> {
   const token = await ensureToken()
-  const metadata = { name: filename, mimeType }
+  const metadata: Record<string, unknown> = { name: filename, mimeType }
+  if (folderId) metadata.parents = [folderId]
   const form = new FormData()
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
   form.append('file', blob)
