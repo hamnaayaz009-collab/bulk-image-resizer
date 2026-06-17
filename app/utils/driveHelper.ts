@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly'
+const SCOPES = 'https://www.googleapis.com/auth/drive'
 
 let tokenClient: any = null
 let accessToken: string | null = null
@@ -67,7 +67,7 @@ export async function ensureToken(): Promise<string> {
       accessToken = resp.access_token
       resolve(accessToken!)
     }
-    tokenClient.requestAccessToken({ prompt: 'consent' })
+    tokenClient.requestAccessToken({ prompt: '' })
   })
 }
 
