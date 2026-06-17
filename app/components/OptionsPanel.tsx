@@ -23,7 +23,7 @@ interface Props {
 
 export default function OptionsPanel({ options, onChange, onProcess, processing, hasImages }: Props) {
   const set = (patch: Partial<Options>) => onChange({ ...options, ...patch })
-  const KB_SIZES = [50, 100, 150, 200, 250, 300]
+  const KB_SIZES = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-6">
