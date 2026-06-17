@@ -121,6 +121,10 @@ export default function Home() {
     setImages(prev => prev.filter(img => img.id !== id))
   }, [])
 
+  const onRename = useCallback((id: string, newName: string) => {
+    setImages(prev => prev.map(img => img.id === id ? { ...img, customName: newName } : img))
+  }, [])
+
   const processAll = useCallback(async () => {
     setProcessing(true)
     const resizeOpts = {
@@ -274,7 +278,7 @@ export default function Home() {
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {images.map(img => (
-                  <ImageCard key={img.id} image={img} onRemove={onRemove} onExportToDrive={driveConfigured ? exportOneToDrive : undefined} />
+                  <ImageCard key={img.id} image={img} onRemove={onRemove} onRename={onRename} onExportToDrive={driveConfigured ? exportOneToDrive : undefined} />
                 ))}
               </div>
             </div>

@@ -1,5 +1,5 @@
 'use client'
-import React from 'react'
+import React, { useState, useRef } from 'react'
 
 export interface ImageFile {
   id: string
@@ -12,6 +12,7 @@ export interface ImageFile {
   resultHeight?: number
   resultSizeKB?: number
   outputFilename?: string
+  customName?: string
   previewUrl: string
   driveFileId?: string
   driveUploading?: boolean
@@ -21,11 +22,21 @@ export interface ImageFile {
 interface Props {
   image: ImageFile
   onRemove: (id: string) => void
+  onRename: (id: string, newName: string) => void
   onExportToDrive?: (id: string) => void
 }
 
 function formatKB(kb: number) {
   return kb >= 1000 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`
+}
+
+function getBaseName(filename: string) {
+  return filename.replace(/\.[^.]+$/, '')
+}
+
+function getExt(filename: string) {
+  const m = filename.match(/\.[^.]+$/)
+  return m ? m[0] : ''
 }
 
 const DriveIcon = () => (
@@ -39,12 +50,41 @@ const DriveIcon = () => (
   </svg>
 )
 
-export default function ImageCard({ image, onRemove, onExportToDrive }: Props) {
+export default function ImageCard({ image, onRemove, onRename, onExportToDrive }: Props) {
+  const displayName = image.customName || image.file.name
+  const ext = getExt(image.file.name)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function startEdit() {
+    setDraft(getBaseName(displayName))
+    setEditing(true)
+    setTimeout(() => inputRef.current?.select(), 0)
+  }
+
+  function commitEdit() {
+    const trimmed = draft.trim()
+    if (trimmed) onRename(image.id, trimmed + ext)
+    setEditing(false)
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') commitEdit()
+    if (e.key === 'Escape') setEditing(false)
+  }
+
+  const outputFilename = image.outputFilename
+    ? (image.customName
+        ? getBaseName(image.customName) + getExt(image.outputFilename)
+        : image.outputFilename)
+    : displayName
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
       <div className="relative aspect-video bg-gray-100 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image.resultUrl || image.previewUrl} alt={image.file.name} className="w-full h-full object-contain" />
+        <img src={image.resultUrl || image.previewUrl} alt={displayName} className="w-full h-full object-contain" />
         <button onClick={() => onRemove(image.id)} className="absolute top-2 right-2 w-6 h-6 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center text-xs transition-colors">&times;</button>
         {image.status === 'processing' && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
@@ -55,7 +95,39 @@ export default function ImageCard({ image, onRemove, onExportToDrive }: Props) {
         {image.driveFileId && <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Drive</div>}
       </div>
       <div className="p-3 flex-1 space-y-2">
-        <p className="text-xs font-medium text-gray-800 truncate" title={image.file.name}>{image.file.name}</p>
+        {/* Editable filename */}
+        {editing ? (
+          <div className="flex items-center gap-1">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={onKeyDown}
+              className="flex-1 text-xs border border-blue-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0"
+              autoFocus
+            />
+            <span className="text-xs text-gray-400 shrink-0">{ext}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 group">
+            <p
+              className="text-xs font-medium text-gray-800 truncate flex-1 cursor-pointer hover:text-blue-600"
+              title={`${displayName} — click to rename`}
+              onClick={startEdit}
+            >
+              {displayName}
+            </p>
+            <button
+              onClick={startEdit}
+              title="Rename"
+              className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Original: {formatKB(image.originalSizeKB)}</span>
           {image.resultSizeKB !== undefined && <span className="text-green-600 font-medium">&rarr; {formatKB(image.resultSizeKB)}</span>}
@@ -63,7 +135,7 @@ export default function ImageCard({ image, onRemove, onExportToDrive }: Props) {
         {image.resultWidth && <p className="text-xs text-gray-400">{image.resultWidth} &times; {image.resultHeight} px</p>}
         {image.status === 'done' && image.resultUrl && (
           <div className="space-y-1.5">
-            <a href={image.resultUrl} download={image.outputFilename} className="block w-full text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium text-xs py-1.5 rounded-lg transition-colors">
+            <a href={image.resultUrl} download={outputFilename} className="block w-full text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium text-xs py-1.5 rounded-lg transition-colors">
               Download
             </a>
             {onExportToDrive && (
