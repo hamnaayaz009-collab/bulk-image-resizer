@@ -42,6 +42,7 @@ export default function Home() {
   const [processing, setProcessing] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [driveLoading, setDriveLoading] = useState(false)
+  const [driveProgress, setDriveProgress] = useState({ done: 0, total: 0 })
   const [driveReady, setDriveReady] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -68,6 +69,7 @@ export default function Home() {
   const pickFromDrive = useCallback(async () => {
     if (!driveReady) return
     setDriveLoading(true)
+    setDriveProgress({ done: 0, total: 0 })
     try {
       const picked = await openDrivePicker(GOOGLE_API_KEY)
       if (!picked.length) return
@@ -88,26 +90,41 @@ export default function Home() {
         }
       }
 
-      const newImages: ImageFile[] = []
-      for (const f of allFiles) {
-        try {
-          const blob = await downloadDriveFile(f.id)
-          const file = new File([blob], f.name, { type: f.mimeType })
-          newImages.push({
-            id: generateId(),
-            file,
-            originalSizeKB: blob.size / 1024,
-            status: 'idle',
-            previewUrl: URL.createObjectURL(blob),
-            driveFileId: f.id,
+      setDriveProgress({ done: 0, total: allFiles.length })
+
+      // Download up to 5 files in parallel
+      const CONCURRENCY = 5
+      const results: ImageFile[] = []
+      for (let i = 0; i < allFiles.length; i += CONCURRENCY) {
+        const batch = allFiles.slice(i, i + CONCURRENCY)
+        const batchResults = await Promise.all(
+          batch.map(async (f) => {
+            try {
+              const blob = await downloadDriveFile(f.id)
+              const file = new File([blob], f.name, { type: f.mimeType })
+              return {
+                id: generateId(),
+                file,
+                originalSizeKB: blob.size / 1024,
+                status: 'idle' as const,
+                previewUrl: URL.createObjectURL(blob),
+                driveFileId: f.id,
+              }
+            } catch (e) {
+              console.error('Failed to download', f.name, e)
+              return null
+            }
           })
-        } catch (e) {
-          console.error('Failed to download', f.name, e)
-        }
+        )
+        const valid = batchResults.filter(Boolean) as ImageFile[]
+        results.push(...valid)
+        setDriveProgress(p => ({ ...p, done: p.done + batch.length }))
+        // Add each batch to UI as it comes in
+        setImages(prev => [...prev, ...valid])
       }
-      setImages(prev => [...prev, ...newImages])
     } finally {
       setDriveLoading(false)
+      setDriveProgress({ done: 0, total: 0 })
     }
   }, [driveReady])
 
@@ -240,7 +257,11 @@ export default function Home() {
                 <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
                 <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
               </svg>
-              {driveLoading ? 'Loading from Drive...' : 'Pick from Google Drive'}
+              {driveLoading
+                ? driveProgress.total > 0
+                  ? `Downloading ${driveProgress.done}/${driveProgress.total}...`
+                  : 'Loading from Drive...'
+                : 'Pick from Google Drive'}
             </button>
           </div>
         ) : (
