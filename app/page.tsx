@@ -8,6 +8,7 @@ import {
   openDrivePicker,
   downloadDriveFile,
   uploadToDrive,
+  listFolderImages,
 } from './utils/driveHelper'
 
 const DEFAULT_OPTIONS: Options = {
@@ -70,8 +71,25 @@ export default function Home() {
     try {
       const picked = await openDrivePicker(GOOGLE_API_KEY)
       if (!picked.length) return
-      const newImages: ImageFile[] = []
+
+      // Expand folders into their image files
+      const IMAGE_TYPES = ['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/tiff']
+      const allFiles: typeof picked = []
       for (const f of picked) {
+        if (f.isFolder) {
+          try {
+            const folderFiles = await listFolderImages(f.id)
+            allFiles.push(...folderFiles)
+          } catch (e) {
+            console.error('Failed to list folder', f.name, e)
+          }
+        } else if (IMAGE_TYPES.includes(f.mimeType)) {
+          allFiles.push(f)
+        }
+      }
+
+      const newImages: ImageFile[] = []
+      for (const f of allFiles) {
         try {
           const blob = await downloadDriveFile(f.id)
           const file = new File([blob], f.name, { type: f.mimeType })

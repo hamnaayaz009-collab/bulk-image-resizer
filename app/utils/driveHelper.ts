@@ -76,18 +76,24 @@ export interface DriveFile {
   name: string
   mimeType: string
   size?: number
+  isFolder?: boolean
 }
 
 export async function openDrivePicker(apiKey: string): Promise<DriveFile[]> {
   const token = await ensureToken()
   return new Promise((resolve) => {
+    // All files view (not restricted to images)
+    const allFilesView = new window.google.picker.View(window.google.picker.ViewId.DOCS)
+    // Folder view so users can browse into folders
+    const folderView = new window.google.picker.View(window.google.picker.ViewId.FOLDERS)
+
     const picker = new window.google.picker.PickerBuilder()
-      .addView(
-        new window.google.picker.View(window.google.picker.ViewId.DOCS_IMAGES)
-      )
+      .addView(allFilesView)
+      .addView(folderView)
       .setOAuthToken(token)
       .setDeveloperKey(apiKey)
       .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+      .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
       .setCallback((data: any) => {
         if (data.action === window.google.picker.Action.PICKED) {
           const files: DriveFile[] = data.docs.map((d: any) => ({
@@ -95,6 +101,7 @@ export async function openDrivePicker(apiKey: string): Promise<DriveFile[]> {
             name: d.name,
             mimeType: d.mimeType,
             size: d.sizeBytes,
+            isFolder: d.mimeType === 'application/vnd.google-apps.folder',
           }))
           resolve(files)
         } else if (data.action === window.google.picker.Action.CANCEL) {
@@ -104,6 +111,25 @@ export async function openDrivePicker(apiKey: string): Promise<DriveFile[]> {
       .build()
     picker.setVisible(true)
   })
+}
+
+// List all image files inside a Drive folder (recursively)
+export async function listFolderImages(folderId: string): Promise<DriveFile[]> {
+  const token = await ensureToken()
+  const IMAGE_MIME_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'image/bmp', 'image/tiff', 'image/svg+xml',
+  ]
+  const mimeQuery = IMAGE_MIME_TYPES.map(m => `mimeType='${m}'`).join(' or ')
+  const query = `'${folderId}' in parents and (${mimeQuery}) and trashed=false`
+
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,size)&pageSize=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) throw new Error(`Folder listing failed: ${res.status}`)
+  const json = await res.json()
+  return (json.files || []) as DriveFile[]
 }
 
 export async function downloadDriveFile(fileId: string): Promise<Blob> {
