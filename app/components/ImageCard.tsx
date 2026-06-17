@@ -110,7 +110,7 @@ export default function ImageCard({ image, onRemove, onRename, onExportToDrive }
             <span className="text-xs text-gray-400 shrink-0">{ext}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 group">
+          <div className="flex items-center gap-1">
             <p
               className="text-xs font-medium text-gray-800 truncate flex-1 cursor-pointer hover:text-blue-600"
               title={`${displayName} — click to rename`}
@@ -121,7 +121,7 @@ export default function ImageCard({ image, onRemove, onRename, onExportToDrive }
             <button
               onClick={startEdit}
               title="Rename"
-              className="text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              className="text-gray-400 hover:text-blue-500 shrink-0 text-xs"
             >
               ✏️
             </button>
