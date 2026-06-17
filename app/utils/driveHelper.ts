@@ -82,10 +82,15 @@ export interface DriveFile {
 export async function openDrivePicker(apiKey: string): Promise<DriveFile[]> {
   const token = await ensureToken()
   return new Promise((resolve) => {
-    // All files view (not restricted to images)
-    const allFilesView = new window.google.picker.View(window.google.picker.ViewId.DOCS)
-    // Folder view so users can browse into folders
-    const folderView = new window.google.picker.View(window.google.picker.ViewId.FOLDERS)
+    // All files view with folder navigation enabled
+    const allFilesView = new window.google.picker.DocsView()
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+    // Folder-only view as a second tab
+    const folderView = new window.google.picker.DocsView()
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder')
 
     const picker = new window.google.picker.PickerBuilder()
       .addView(allFilesView)
@@ -93,7 +98,6 @@ export async function openDrivePicker(apiKey: string): Promise<DriveFile[]> {
       .setOAuthToken(token)
       .setDeveloperKey(apiKey)
       .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
-      .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
       .setCallback((data: any) => {
         if (data.action === window.google.picker.Action.PICKED) {
           const files: DriveFile[] = data.docs.map((d: any) => ({
